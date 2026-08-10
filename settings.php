@@ -24,10 +24,7 @@ $_SESSION['qdisplay_last_seen'] = time();
 if (empty($_SESSION['csrf_token'])) {
     $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
 }
-function csrfValid() {
-    $token = isset($_POST['csrf']) ? (string)$_POST['csrf'] : '';
-    return hash_equals((string)($_SESSION['csrf_token'] ?? ''), $token);
-}
+// csrfValid() ใช้ตัวกลางจาก config.php (ใช้ร่วมกับ confirm.php)
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 function sv($local, $key, $default) {
@@ -767,6 +764,9 @@ select.field-select:focus{border-color:#3b82f6}
                 <div style="font-size:12px;color:#64748b;margin-top:4px">
                     สำหรับร้านที่ไม่มีจอ Checker — พนักงานครัวเข้าหน้า <code>confirm.php</code> แล้วกดยืนยันเองว่าออเดอร์ไหนเสร็จแล้ว
                     ถ้ามี Checker อยู่แล้ว ระบบเดิมยังทำงานตามปกติควบคู่กันได้ (ไม่ต้องเปิดก็ได้)
+                </div>
+                <div style="margin-top:10px">
+                    <a href="confirm.php" target="_blank" rel="noopener" class="btn-test" style="text-decoration:none;display:inline-block">เปิดหน้ายืนยันสำหรับพนักงาน →</a>
                 </div>
             </div>
             <div class="field">

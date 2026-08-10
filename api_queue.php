@@ -208,13 +208,8 @@ try {
         // เมนูใหม่เข้ามาเพิ่มหลังจากกดยืนยัน (stale) และยังไม่เกิน ready_display_minutes (expired)
         $manualKey         = $row['TransactionID'] . '_' . $row['ComputerID'];
         $manualConfirmedAt = isset($manualConfirmed[$manualKey]) ? (string)$manualConfirmed[$manualKey] : '';
-        $isManualReady     = false;
-        if ($manualConfirmedAt !== '') {
-            $lastPendingSubmit = (string)($row['last_pending_submit'] ?? '');
-            $stale   = ($lastPendingSubmit !== '' && $lastPendingSubmit > $manualConfirmedAt);
-            $expired = ($readyMins > 0 && strtotime($manualConfirmedAt) < (time() - $readyMins * 60));
-            $isManualReady = !$stale && !$expired;
-        }
+        $isManualReady     = $manualConfirmedAt !== ''
+            && isManualReadyValid($manualConfirmedAt, $row['last_pending_submit'] ?? '', $readyMins);
 
         if (($pendingCount === 0 && $doneCount > 0) || $isManualReady) {
             // ออกจาก checker ครบทุก item หรือพนักงานกดยืนยันเอง → READY

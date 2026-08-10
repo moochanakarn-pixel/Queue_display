@@ -157,15 +157,47 @@ function loadManualReady()
     return is_array($data['confirmed'] ?? null) ? $data['confirmed'] : array();
 }
 
-function setManualReadyConfirm($key)
+function setManualReadyConfirm($key, $confirmedAt = null)
 {
-    $file      = getManualReadyFilePath();
+    $file = getManualReadyFilePath();
+
+    // ล็อกไฟล์แยกต่างหากคร่อมทั้ง read-modify-write กันสองคำขอพร้อมกันเขียนทับกันหาย
+    $lockHandle = fopen($file . '.lock', 'c');
+    if ($lockHandle === false) return false;
+    if (!flock($lockHandle, LOCK_EX)) {
+        fclose($lockHandle);
+        return false;
+    }
+
     $confirmed = loadManualReady();
-    $confirmed[$key] = date('Y-m-d H:i:s');
+    $confirmed[$key] = $confirmedAt !== null ? (string)$confirmedAt : date('Y-m-d H:i:s');
     $content = "<?php return " . var_export(array('date' => date('Y-m-d'), 'confirmed' => $confirmed), true) . ";\n";
     $tmp = $file . '.tmp';
-    if (file_put_contents($tmp, $content, LOCK_EX) === false) return false;
-    return rename($tmp, $file);
+    $ok  = file_put_contents($tmp, $content) !== false && rename($tmp, $file);
+    if (!$ok) @unlink($tmp);
+
+    flock($lockHandle, LOCK_UN);
+    fclose($lockHandle);
+    return $ok;
+}
+
+// ตรวจว่าการยืนยันด้วยมือยัง valid อยู่มั้ย — ไม่ stale (มีเมนูใหม่เข้ามาหลังยืนยัน)
+// และไม่ expired (เกิน ready_display_minutes นับจากเวลายืนยัน) ใช้ร่วมกันทั้ง
+// api_queue.php (ตัดสิน READY/PREPARING) และ confirm.php (ตัดสินว่าจะโชว์ให้กดซ้ำมั้ย)
+function isManualReadyValid($confirmedAt, $lastPendingSubmit, $readyDisplayMinutes)
+{
+    $confirmedAt = (string)$confirmedAt;
+    if ($confirmedAt === '') return false;
+    $lastPendingSubmit = (string)$lastPendingSubmit;
+    $stale   = ($lastPendingSubmit !== '' && $lastPendingSubmit > $confirmedAt);
+    $expired = ($readyDisplayMinutes > 0 && strtotime($confirmedAt) < (time() - $readyDisplayMinutes * 60));
+    return !$stale && !$expired;
+}
+
+function csrfValid()
+{
+    $token = isset($_POST['csrf']) ? (string)$_POST['csrf'] : '';
+    return hash_equals((string)($_SESSION['csrf_token'] ?? ''), $token);
 }
 
 function jsonResponse($payload)

@@ -23,11 +23,7 @@ $_SESSION['qdisplay_staff_last_seen'] = time();
 if (empty($_SESSION['csrf_token'])) {
     $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
 }
-function csrfValid()
-{
-    $token = isset($_POST['csrf']) ? (string)$_POST['csrf'] : '';
-    return hash_equals((string)($_SESSION['csrf_token'] ?? ''), $token);
-}
+// csrfValid() ใช้ตัวกลางจาก config.php (ใช้ร่วมกับ settings.php)
 
 $action = isset($_POST['action']) ? (string)$_POST['action'] : '';
 $msg    = '';
@@ -114,7 +110,8 @@ if ($action === 'list_preparing') {
                     TransactionID,
                     ComputerID,
                     SUM(CASE WHEN ProcessStatus IN (0,2) THEN 1 ELSE 0 END) AS pending_count,
-                    SUM(CASE WHEN ProcessStatus = 1      THEN 1 ELSE 0 END) AS done_count
+                    SUM(CASE WHEN ProcessStatus = 1      THEN 1 ELSE 0 END) AS done_count,
+                    MAX(CASE WHEN ProcessStatus IN (0,2) THEN SubmitOrderDateTime END) AS last_pending_submit
                 FROM orderprocessdetailfront
                 WHERE SubmitOrderDateTime >= DATE_SUB(CURDATE(), INTERVAL 1 DAY)
                   AND ProductSetType >= 0
@@ -135,7 +132,12 @@ if ($action === 'list_preparing') {
             if ($pendingCount === 0 && $doneCount > 0) continue; // Checker ยืนยันแล้ว ไม่ต้องโชว์ให้กดซ้ำ
 
             $key = $row['TransactionID'] . '_' . $row['ComputerID'];
-            if (isset($confirmed[$key])) continue; // กดยืนยันเองไปแล้ว รอ refresh ฝั่งจอ
+            if (isset($confirmed[$key])
+                && isManualReadyValid($confirmed[$key], $row['last_pending_submit'] ?? '', READY_DISPLAY_MINUTES)) {
+                continue; // กดยืนยันไปแล้วและยังใช้ได้ (ไม่ stale/expired) ไม่ต้องโชว์ให้กดซ้ำ
+            }
+            // ถ้าเคยกดยืนยันแต่ stale (มีเมนูใหม่เข้ามาทีหลัง) หรือ expired แล้ว
+            // ปล่อยผ่านมาโชว์การ์ดใหม่ให้กดยืนยันอีกครั้ง
 
             $tableInfo = explode('|', (string)$row['TableInfo'], 2);
             $tableId   = (int)($tableInfo[0] ?? 0);
@@ -184,7 +186,21 @@ if ($action === 'confirm_ready') {
         echo json_encode(['success' => false, 'message' => 'ข้อมูลไม่ถูกต้อง']);
         exit;
     }
-    $ok = setManualReadyConfirm($tid . '_' . $cid);
+    // ใช้เวลาจาก DB server (NOW()) แทนนาฬิกาเครื่อง PHP เอง เพื่อให้เทียบกับ
+    // SubmitOrderDateTime/FinishDateTime (ซึ่งมาจาก DB เช่นกัน) ได้ตรงกัน ไม่คลาดเคลื่อน
+    // ถ้าต่อ DB ไม่ได้ fallback ไปใช้เวลาเครื่อง PHP แทน (ยังกดยืนยันได้ตามปกติ)
+    $confirmedAt = date('Y-m-d H:i:s');
+    try {
+        $conn      = getDbConnection();
+        $nowResult = $conn->query('SELECT NOW() AS now_dt');
+        if ($nowResult && $nowResult->num_rows > 0) {
+            $confirmedAt = (string)$nowResult->fetch_assoc()['now_dt'];
+        }
+        $conn->close();
+    } catch (Exception $e) {
+        // เชื่อมต่อไม่ได้ ใช้เวลาเครื่อง PHP ต่อไป
+    }
+    $ok = setManualReadyConfirm($tid . '_' . $cid, $confirmedAt);
     echo json_encode(['success' => $ok, 'message' => $ok ? 'ยืนยันแล้ว' : 'บันทึกไม่ได้ — ตรวจสอบสิทธิ์ write ของโฟลเดอร์']);
     exit;
 }
@@ -315,6 +331,7 @@ var emptyState  = document.getElementById('emptyState');
 var statusLine  = document.getElementById('statusLine');
 var toast       = document.getElementById('toast');
 var busyKeys    = {};
+var listInFlight = false;
 
 function showToast(ok, msg) {
     toast.textContent = msg;
@@ -350,12 +367,15 @@ function confirmReady(tid, cid, key) {
 }
 
 function loadList() {
+    if (listInFlight) return;
+    listInFlight = true;
     var data = new FormData();
     data.append('action', 'list_preparing');
     data.append('csrf', CSRF_TOKEN);
     fetch('confirm.php', { method: 'POST', body: data })
         .then(function (r) { return r.json(); })
         .then(function (d) {
+            listInFlight = false;
             if (!d.success) {
                 statusLine.textContent = d.message || 'โหลดไม่ได้';
                 return;
@@ -377,6 +397,7 @@ function loadList() {
             }).join('');
         })
         .catch(function () {
+            listInFlight = false;
             statusLine.textContent = 'เชื่อมต่อเซิร์ฟเวอร์ไม่ได้';
         });
 }
