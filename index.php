@@ -84,7 +84,8 @@
         .q-empty {
             grid-column: 1 / -1;
             text-align: center;
-            color: #bbb;
+            color: var(--c-queue-text);
+            opacity: .4;
             font-size: clamp(16px, 3.5vw, 36px);
             padding: clamp(20px, 5vh, 60px);
         }
@@ -119,10 +120,11 @@
             z-index: 995;
         }
         .latest-label {
-            font-size: clamp(11px, 2vw, 20px);
+            font-size: clamp(13px, 2.2vw, 22px);
             font-weight: 700;
             letter-spacing: 3px;
-            color: #666;
+            color: var(--c-queue-text);
+            opacity: .6;
             text-transform: uppercase;
             margin-bottom: clamp(1px, 0.3vh, 4px);
         }
@@ -151,19 +153,21 @@
             position: relative;
         }
         .shop-name {
-            font-size: clamp(10px, 1.6vw, 18px);
+            font-size: clamp(13px, 1.9vw, 22px);
             font-weight: 600;
             letter-spacing: 3px;
             text-transform: uppercase;
-            color: rgba(0,0,0,0.22);
+            color: var(--c-queue-text);
+            opacity: .5;
             text-align: center;
         }
         #shopClock {
             position: absolute;
             right: 16px;
-            font-size: clamp(11px, 1.5vw, 17px);
+            font-size: clamp(14px, 1.8vw, 21px);
             font-weight: 600;
-            color: rgba(0,0,0,0.22);
+            color: var(--c-queue-text);
+            opacity: .5;
             letter-spacing: 1px;
             font-variant-numeric: tabular-nums;
         }
@@ -276,8 +280,10 @@
         }
         /* ── Elapsed time (PREPARING) ── */
         .q-time {
-            font-size: clamp(9px, 1.4vw, 13px);
-            color: #aaa;
+            font-size: clamp(12px, 1.9vw, 17px);
+            color: var(--c-queue-text);
+            opacity: .55;
+            font-weight: 600;
             text-align: center;
             line-height: 1.2;
             padding-bottom: clamp(2px, 0.4vh, 5px);
