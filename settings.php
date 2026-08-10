@@ -170,7 +170,7 @@ if ($action === 'save' && !empty($_SESSION['qdisplay_auth'])) {
         $isErr = true;
     } else {
         $newPin = trim((string)($_POST['settings_pin'] ?? $configuredPin));
-        if ($newPin === '') $newPin = $configuredPin;
+        if (!preg_match('/^\d{4,8}$/', $newPin)) $newPin = $configuredPin;
         $new = [
             'db_host'               => trim((string)($_POST['db_host']               ?? '')),
             'db_port'               => max(1, min(65535, (int)($_POST['db_port']     ?? 3307))),
