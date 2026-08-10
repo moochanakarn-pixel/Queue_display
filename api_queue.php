@@ -201,9 +201,14 @@ try {
 
         if ($pendingCount === 0 && $doneCount > 0) {
             // ออกจาก checker ครบทุก item → READY
+            // last_finish อาจเป็น zero-date ('0000-00-00 00:00:00') จากข้อมูลเก่า ต้อง fallback ด้วย
+            $lastFinish = (string)($row['last_finish'] ?? '');
+            if ($lastFinish === '' || strpos($lastFinish, '0000-00-00') === 0) {
+                $lastFinish = (string)$row['SubmitOrderDateTime'];
+            }
             $ready[] = array(
                 'q' => $q,
-                't' => (string)($row['last_finish'] ?: $row['SubmitOrderDateTime']),
+                't' => $lastFinish,
             );
         } else {
             // pending > 0 = ยังอยู่ในครัว, หรือ 0/0 = ยังไม่มีข้อมูลครัว → PREPARING

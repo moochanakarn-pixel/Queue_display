@@ -1,8 +1,33 @@
 <?php
 session_name('qdisplay_cfg');
+$__isHttps = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') || (($_SERVER['SERVER_PORT'] ?? '') == 443);
+session_set_cookie_params([
+    'lifetime' => 0,
+    'path'     => '/',
+    'httponly' => true,
+    'samesite' => 'Lax',
+    'secure'   => $__isHttps,
+]);
 session_start();
 ob_start();
 require_once __DIR__ . '/config.php';
+
+// ── idle session timeout (30 นาที) ────────────────────────────────────────────
+define('QDISPLAY_SESSION_TIMEOUT', 1800);
+if (!empty($_SESSION['qdisplay_auth']) && !empty($_SESSION['qdisplay_last_seen'])
+    && (time() - (int)$_SESSION['qdisplay_last_seen']) > QDISPLAY_SESSION_TIMEOUT) {
+    unset($_SESSION['qdisplay_auth']);
+}
+$_SESSION['qdisplay_last_seen'] = time();
+
+// ── CSRF token ─────────────────────────────────────────────────────────────────
+if (empty($_SESSION['csrf_token'])) {
+    $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
+}
+function csrfValid() {
+    $token = isset($_POST['csrf']) ? (string)$_POST['csrf'] : '';
+    return hash_equals((string)($_SESSION['csrf_token'] ?? ''), $token);
+}
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 function sv($local, $key, $default) {
@@ -32,6 +57,14 @@ $action = isset($_POST['action']) ? (string)$_POST['action'] : '';
 if ($action === 'list_computers') {
     while (ob_get_level()) ob_end_clean();
     header('Content-Type: application/json; charset=utf-8');
+    if (empty($_SESSION['qdisplay_auth'])) {
+        echo json_encode(['success' => false, 'message' => 'ไม่ได้รับอนุญาต']);
+        exit;
+    }
+    if (!csrfValid()) {
+        echo json_encode(['success' => false, 'message' => 'CSRF token ไม่ถูกต้อง กรุณาโหลดหน้าใหม่']);
+        exit;
+    }
     try {
         $h = trim((string)($_POST['db_host'] ?? ''));
         $p = max(1, (int)($_POST['db_port'] ?? 3307));
@@ -63,6 +96,14 @@ if ($action === 'list_computers') {
 if ($action === 'test_db') {
     while (ob_get_level()) ob_end_clean();
     header('Content-Type: application/json; charset=utf-8');
+    if (empty($_SESSION['qdisplay_auth'])) {
+        echo json_encode(['success' => false, 'message' => 'ไม่ได้รับอนุญาต']);
+        exit;
+    }
+    if (!csrfValid()) {
+        echo json_encode(['success' => false, 'message' => 'CSRF token ไม่ถูกต้อง กรุณาโหลดหน้าใหม่']);
+        exit;
+    }
     try {
         $h = trim((string)($_POST['db_host'] ?? ''));
         $p = max(1, (int)($_POST['db_port'] ?? 3307));
@@ -82,26 +123,50 @@ if ($action === 'test_db') {
 
 // Verify PIN
 if ($action === 'pin') {
-    $pin = (string)($_POST['pin'] ?? '');
-    if ($pin === $configuredPin) {
-        session_regenerate_id(true);
-        $_SESSION['qdisplay_auth'] = true;
-    } else {
-        $msg = 'PIN ไม่ถูกต้อง';
+    $now       = time();
+    $attempts  = (int)($_SESSION['pin_attempts']   ?? 0);
+    $lockUntil = (int)($_SESSION['pin_lock_until'] ?? 0);
+    if ($now < $lockUntil) {
+        $msg   = 'ลองผิดหลายครั้งเกินไป กรุณารออีก ' . ($lockUntil - $now) . ' วินาที';
         $isErr = true;
+    } elseif (!csrfValid()) {
+        $msg   = 'คำขอไม่ถูกต้อง กรุณาโหลดหน้าใหม่แล้วลองอีกครั้ง';
+        $isErr = true;
+    } else {
+        $pin = (string)($_POST['pin'] ?? '');
+        if (hash_equals($configuredPin, $pin)) {
+            session_regenerate_id(true);
+            $_SESSION['qdisplay_auth'] = true;
+            unset($_SESSION['pin_attempts'], $_SESSION['pin_lock_until']);
+        } else {
+            $attempts++;
+            $_SESSION['pin_attempts'] = $attempts;
+            if ($attempts >= 5) {
+                // ล็อกเพิ่มขึ้นเรื่อยๆ ทุก 5 ครั้งที่ผิด (60s, 120s, 180s, ...) กัน brute-force
+                $_SESSION['pin_lock_until'] = $now + 60 * (intdiv($attempts, 5));
+            }
+            $msg   = 'PIN ไม่ถูกต้อง';
+            $isErr = true;
+        }
     }
 }
 
 // Logout
 if ($action === 'logout') {
-    $_SESSION = [];
-    session_destroy();
+    if (csrfValid()) {
+        $_SESSION = [];
+        session_destroy();
+    }
     header('Location: settings.php');
     exit;
 }
 
 // Save settings
 if ($action === 'save' && !empty($_SESSION['qdisplay_auth'])) {
+    if (!csrfValid()) {
+        $msg   = 'คำขอไม่ถูกต้อง (CSRF) กรุณาโหลดหน้าใหม่แล้วลองอีกครั้ง';
+        $isErr = true;
+    } else {
     $pin = isset($_POST['pin']) ? (string)$_POST['pin'] : $configuredPin;
     if ($pin !== $configuredPin && $pin !== '') {
         $msg = 'PIN ไม่ถูกต้อง';
@@ -111,7 +176,7 @@ if ($action === 'save' && !empty($_SESSION['qdisplay_auth'])) {
         if ($newPin === '') $newPin = $configuredPin;
         $new = [
             'db_host'               => trim((string)($_POST['db_host']               ?? '')),
-            'db_port'               => max(1, (int)($_POST['db_port']                ?? 3307)),
+            'db_port'               => max(1, min(65535, (int)($_POST['db_port']     ?? 3307))),
             'db_name'               => trim((string)($_POST['db_name']               ?? '')),
             'db_user'               => trim((string)($_POST['db_user']               ?? '')),
             'db_pass'               => (($_POST['db_pass'] ?? '') !== '') ? (string)$_POST['db_pass'] : (string)sv($local, 'db_pass', ''),
@@ -157,6 +222,7 @@ if ($action === 'save' && !empty($_SESSION['qdisplay_auth'])) {
             $isErr = true;
         }
     }
+    }
 }
 
 // Upload custom sound file
@@ -165,6 +231,10 @@ if ($action === 'upload_sound') {
     header('Content-Type: application/json; charset=utf-8');
     if (empty($_SESSION['qdisplay_auth'])) {
         echo json_encode(['success' => false, 'message' => 'ไม่ได้รับอนุญาต']);
+        exit;
+    }
+    if (!csrfValid()) {
+        echo json_encode(['success' => false, 'message' => 'CSRF token ไม่ถูกต้อง กรุณาโหลดหน้าใหม่']);
         exit;
     }
     try {
@@ -305,6 +375,7 @@ select.field-select:focus{border-color:#3b82f6}
     <?php if ($auth): ?>
     <form method="post" style="margin:0">
         <input type="hidden" name="action" value="logout">
+        <input type="hidden" name="csrf" value="<?= h($_SESSION['csrf_token']) ?>">
         <button type="submit" class="btn-logout">ออก</button>
     </form>
     <?php else: ?>
@@ -329,6 +400,7 @@ select.field-select:focus{border-color:#3b82f6}
         <?php endif; ?>
         <form method="post" id="pinForm">
             <input type="hidden" name="action" value="pin">
+            <input type="hidden" name="csrf" value="<?= h($_SESSION['csrf_token']) ?>">
             <input type="password" name="pin" id="pinInput" class="pin-input"
                    maxlength="8" inputmode="numeric" pattern="[0-9]*"
                    autocomplete="off" autofocus placeholder="••••">
@@ -363,6 +435,7 @@ select.field-select:focus{border-color:#3b82f6}
 
     <form method="post">
         <input type="hidden" name="action" value="save">
+        <input type="hidden" name="csrf" value="<?= h($_SESSION['csrf_token']) ?>">
 
         <!-- Database -->
         <div class="section">
@@ -693,6 +766,7 @@ select.field-select:focus{border-color:#3b82f6}
 </div>
 
 <script>
+var CSRF_TOKEN = <?php echo json_encode($_SESSION['csrf_token']); ?>;
 function syncColor(txtEl, colorId) {
     var v = txtEl.value.trim();
     if (/^#[0-9a-fA-F]{3,8}$/.test(v)) {
@@ -704,6 +778,7 @@ document.getElementById('btnLoadComputers').addEventListener('click', function()
     var form = this.closest('form');
     var data = new FormData();
     data.append('action',  'list_computers');
+    data.append('csrf',    CSRF_TOKEN);
     data.append('db_host', form.querySelector('[name=db_host]').value);
     data.append('db_port', form.querySelector('[name=db_port]').value);
     data.append('db_name', form.querySelector('[name=db_name]').value);
@@ -790,6 +865,7 @@ if (uploadZone && soundFileInput) {
         if (!file) return;
         var fd = new FormData();
         fd.append('action', 'upload_sound');
+        fd.append('csrf',   CSRF_TOKEN);
         fd.append('sound_file', file);
         uploadResult.textContent = 'กำลังอัปโหลด...';
         uploadResult.style.color = '#94a3b8';
@@ -888,6 +964,7 @@ document.getElementById('btnTest').addEventListener('click', function() {
     var form = this.closest('form');
     var data = new FormData();
     data.append('action',  'test_db');
+    data.append('csrf',    CSRF_TOKEN);
     data.append('db_host', form.querySelector('[name=db_host]').value);
     data.append('db_port', form.querySelector('[name=db_port]').value);
     data.append('db_name', form.querySelector('[name=db_name]').value);
