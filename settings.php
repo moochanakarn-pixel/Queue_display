@@ -207,6 +207,10 @@ if ($action === 'save' && !empty($_SESSION['qdisplay_auth'])) {
                                     ? trim((string)$_POST['sound_file'])
                                     : (string)sv($local, 'sound_file', ''),
             'show_computer_name'    => isset($_POST['show_computer_name'])    ? 1 : 0,
+            'manual_ready_enabled'  => isset($_POST['manual_ready_enabled'])  ? 1 : 0,
+            'staff_pin'             => preg_match('/^\d{4,8}$/', trim((string)($_POST['staff_pin'] ?? '')))
+                                        ? trim((string)$_POST['staff_pin'])
+                                        : (string)sv($local, 'staff_pin', '0000'),
         ];
         $content = "<?php return " . var_export($new, true) . ";\n";
         $dest = settingsFilePath();
@@ -746,6 +750,29 @@ select.field-select:focus{border-color:#3b82f6}
                         <span class="toggle-slider"></span>
                     </div>
                 </label>
+            </div>
+        </div>
+
+        <!-- Manual Ready Confirm -->
+        <div class="section">
+            <div class="section-title">ปุ่มยืนยันเสร็จด้วยมือ (ไม่พึ่ง Checker)</div>
+            <div class="field">
+                <label class="toggle-wrap">
+                    <span class="toggle-text">เปิดใช้ปุ่มยืนยันเสร็จด้วยมือที่หน้า confirm.php</span>
+                    <div class="toggle-switch">
+                        <input type="checkbox" name="manual_ready_enabled" value="1" <?= sv($local,'manual_ready_enabled',0) ? 'checked' : '' ?>>
+                        <span class="toggle-slider"></span>
+                    </div>
+                </label>
+                <div style="font-size:12px;color:#64748b;margin-top:4px">
+                    สำหรับร้านที่ไม่มีจอ Checker — พนักงานครัวเข้าหน้า <code>confirm.php</code> แล้วกดยืนยันเองว่าออเดอร์ไหนเสร็จแล้ว
+                    ถ้ามี Checker อยู่แล้ว ระบบเดิมยังทำงานตามปกติควบคู่กันได้ (ไม่ต้องเปิดก็ได้)
+                </div>
+            </div>
+            <div class="field">
+                <label>PIN สำหรับพนักงานเข้าหน้ายืนยัน (แยกจาก PIN ตั้งค่า)</label>
+                <input type="text" name="staff_pin" value="<?= h(sv($local,'staff_pin','0000')) ?>" maxlength="8" inputmode="numeric" style="width:200px">
+                <div style="font-size:12px;color:#64748b;margin-top:4px">ตัวเลข 4–8 หลัก (ค่าเริ่มต้น 0000) — ให้พนักงานครัวใช้ ไม่ใช่ PIN เดียวกับตั้งค่าระบบ</div>
             </div>
         </div>
 

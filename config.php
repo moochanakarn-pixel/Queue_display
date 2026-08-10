@@ -48,6 +48,8 @@ define('SOUND_TYPE',      (string)localSetting($__localSettings, 'sound_type',  
 define('SOUND_BEEP_TONE', (string)localSetting($__localSettings, 'sound_beep_tone', 'ding'));
 define('SOUND_FILE',      (string)localSetting($__localSettings, 'sound_file',      ''));
 define('SHOW_COMPUTER_NAME',     (bool)(int)localSetting($__localSettings, 'show_computer_name', 1));
+define('MANUAL_READY_ENABLED',   (bool)(int)localSetting($__localSettings, 'manual_ready_enabled', 0));
+define('STAFF_PIN',           (string)localSetting($__localSettings, 'staff_pin',            '0000'));
 
 define('KDS_ENV_DB_HOST', 'KDS_DB_HOST');
 define('KDS_ENV_DB_PORT', 'KDS_DB_PORT');
@@ -132,6 +134,38 @@ function getDbConnection()
 function h($value)
 {
     return htmlspecialchars((string)$value, ENT_QUOTES, 'UTF-8');
+}
+
+// ── Manual-ready store: ไฟล์ local เก็บ TransactionID_ComputerID ที่พนักงานกดยืนยันเอง
+// (ไม่แตะตาราง POS ตามข้อจำกัด "ไม่มี ALTER/CREATE TABLE") วนรีเซ็ตทุกวัน
+function getManualReadyFilePath()
+{
+    $scriptFile = isset($_SERVER['SCRIPT_FILENAME']) ? (string)$_SERVER['SCRIPT_FILENAME'] : '';
+    if ($scriptFile !== '') {
+        $scriptDir = dirname(realpath($scriptFile) ?: $scriptFile);
+        return $scriptDir . DIRECTORY_SEPARATOR . 'manual_ready.local.php';
+    }
+    return __DIR__ . DIRECTORY_SEPARATOR . 'manual_ready.local.php';
+}
+
+function loadManualReady()
+{
+    $file = getManualReadyFilePath();
+    if (!is_file($file)) return array();
+    $data = require $file;
+    if (!is_array($data) || ($data['date'] ?? '') !== date('Y-m-d')) return array();
+    return is_array($data['confirmed'] ?? null) ? $data['confirmed'] : array();
+}
+
+function setManualReadyConfirm($key)
+{
+    $file      = getManualReadyFilePath();
+    $confirmed = loadManualReady();
+    $confirmed[$key] = date('Y-m-d H:i:s');
+    $content = "<?php return " . var_export(array('date' => date('Y-m-d'), 'confirmed' => $confirmed), true) . ";\n";
+    $tmp = $file . '.tmp';
+    if (file_put_contents($tmp, $content, LOCK_EX) === false) return false;
+    return rename($tmp, $file);
 }
 
 function jsonResponse($payload)

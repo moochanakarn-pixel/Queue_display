@@ -162,7 +162,8 @@ try {
                 ComputerID,
                 SUM(CASE WHEN ProcessStatus IN (0,2) THEN 1 ELSE 0 END) AS pending_count,
                 SUM(CASE WHEN ProcessStatus = 1      THEN 1 ELSE 0 END) AS done_count,
-                MAX(FinishDateTime) AS last_finish
+                MAX(FinishDateTime) AS last_finish,
+                MAX(CASE WHEN ProcessStatus IN (0,2) THEN SubmitOrderDateTime END) AS last_pending_submit
             FROM orderprocessdetailfront
             WHERE SubmitOrderDateTime >= DATE_SUB(CURDATE(), INTERVAL 1 DAY)
               AND ProductSetType >= 0
@@ -180,6 +181,10 @@ try {
 
     $preparing = array();
     $ready     = array();
+
+    // ── Manual-ready override: กรณีไม่มีจอ Checker พนักงานกดยืนยันเองผ่าน confirm.php
+    // ยังคงทำงานคู่กับ path เดิม (Checker confirm ก็ย้ายไป READY ได้ตามปกติ)
+    $manualConfirmed = MANUAL_READY_ENABLED ? loadManualReady() : array();
 
     while ($row = $result->fetch_assoc()) {
         // แสดงเหมือน checker: dine-in → "โต๊ะ X", delivery → DisplayTableName
@@ -199,12 +204,24 @@ try {
         $pendingCount = (int)$row['pending_count'];
         $doneCount    = (int)$row['done_count'];
 
-        if ($pendingCount === 0 && $doneCount > 0) {
-            // ออกจาก checker ครบทุก item → READY
+        // แถวนี้ถูกพนักงานกดยืนยันเองมั้ย (confirm.php) — ใช้ได้เฉพาะตอนที่ยังไม่มี
+        // เมนูใหม่เข้ามาเพิ่มหลังจากกดยืนยัน (stale) และยังไม่เกิน ready_display_minutes (expired)
+        $manualKey         = $row['TransactionID'] . '_' . $row['ComputerID'];
+        $manualConfirmedAt = isset($manualConfirmed[$manualKey]) ? (string)$manualConfirmed[$manualKey] : '';
+        $isManualReady     = false;
+        if ($manualConfirmedAt !== '') {
+            $lastPendingSubmit = (string)($row['last_pending_submit'] ?? '');
+            $stale   = ($lastPendingSubmit !== '' && $lastPendingSubmit > $manualConfirmedAt);
+            $expired = ($readyMins > 0 && strtotime($manualConfirmedAt) < (time() - $readyMins * 60));
+            $isManualReady = !$stale && !$expired;
+        }
+
+        if (($pendingCount === 0 && $doneCount > 0) || $isManualReady) {
+            // ออกจาก checker ครบทุก item หรือพนักงานกดยืนยันเอง → READY
             // last_finish อาจเป็น zero-date ('0000-00-00 00:00:00') จากข้อมูลเก่า ต้อง fallback ด้วย
             $lastFinish = (string)($row['last_finish'] ?? '');
             if ($lastFinish === '' || strpos($lastFinish, '0000-00-00') === 0) {
-                $lastFinish = (string)$row['SubmitOrderDateTime'];
+                $lastFinish = $manualConfirmedAt !== '' ? $manualConfirmedAt : (string)$row['SubmitOrderDateTime'];
             }
             $ready[] = array(
                 'q' => $q,

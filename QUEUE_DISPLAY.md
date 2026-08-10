@@ -12,8 +12,10 @@
 | `api_queue.php` | API endpoint ส่ง JSON กลับให้ index.php |
 | `config.php` | โหลดค่าตั้งต้น, DB helper, ฟังก์ชันกลาง |
 | `settings.php` | หน้าตั้งค่า (PIN-protected) |
-| `web.config` | IIS config — ซ่อน settings.local.php และ log |
+| `confirm.php` | หน้ายืนยันเสร็จด้วยมือสำหรับพนักงานครัว (Staff PIN-protected, เปิด/ปิดได้จาก settings) — ใช้กรณีไม่มีจอ Checker |
+| `web.config` | IIS config — ซ่อนไฟล์ `.local.php` และ log |
 | `settings.local.php` | **ไม่ track ใน git** — ค่าตั้งค่าเฉพาะเครื่อง (DB, PIN, สี ฯลฯ) |
+| `manual_ready.local.php` | **ไม่ track ใน git** — สร้าง/รีเซ็ตอัตโนมัติทุกวัน เก็บรายการที่พนักงานกดยืนยันเองผ่าน confirm.php |
 
 ---
 
@@ -50,6 +52,10 @@
     'color_header_text'     => '#ffffff',   // สีตัวอักษร header
     'color_queue_text'      => '#1a1a2e',   // สีหมายเลขคิว
     'color_app_bg'          => '#ffffff',   // สีพื้นหลังหลัก
+
+    // ── Manual Ready Confirm (ไม่มีจอ Checker) ─────────
+    'manual_ready_enabled'  => 0,            // 1 = เปิดปุ่มยืนยันเสร็จด้วยมือที่ confirm.php
+    'staff_pin'             => '0000',       // PIN พนักงานเข้าหน้า confirm.php (แยกจาก settings_pin)
 ];
 ```
 
@@ -89,6 +95,18 @@ done_count    = SUM(ProcessStatus = 1)         -- เสร็จแล้ว
 - PREPARING: รอนานสุดขึ้นก่อน (`SubmitOrderDateTime ASC`)
 
 **READY หายออกเมื่อ**: `last_finish < NOW() - INTERVAL ready_display_minutes MINUTE`
+
+---
+
+## Manual Ready Confirm (ไม่มีจอ Checker)
+
+สำหรับร้านที่ไม่มีระบบ Checker ยืนยันความเสร็จของแต่ละเมนู (`orderprocessdetailfront.ProcessStatus` จะไม่มีวันเป็น 1 เลย) เปิดใช้ `manual_ready_enabled` เพื่อให้พนักงานครัวกดยืนยันเองผ่าน `confirm.php` (PIN แยกจากหน้าตั้งค่า — `staff_pin`)
+
+- ทำงาน**คู่ขนาน**กับ path เดิม ไม่ได้แทนที่ — ถ้ามี Checker จริงและ Checker กดเสร็จ ออเดอร์นั้นก็ยัง READY ตามปกติเหมือนเดิม (`pending=0 AND done>0` ยังทำงาน)
+- การกดยืนยันเก็บไว้ในไฟล์ `manual_ready.local.php` (คีย์ `TransactionID_ComputerID` → เวลาที่กด) **ไม่แตะตาราง POS** เพราะ MySQL 5.1 ที่ใช้ไม่มี ALTER/CREATE TABLE — รีเซ็ตอัตโนมัติทุกวัน
+- การยืนยันจะ**ใช้ไม่ได้ (stale)** ถ้ามีเมนูใหม่ถูกส่งเข้าครัวหลังจากเวลาที่กดยืนยัน (เทียบกับ `last_pending_submit`) — ต้องกดยืนยันใหม่
+- การยืนยันจะ**หมดอายุ (expired)** ตาม `ready_display_minutes` เหมือน READY ปกติ นับจากเวลาที่กดยืนยัน
+- `confirm.php` จะไม่โชว์ออเดอร์ที่ Checker ยืนยันไปแล้ว หรือที่กดยืนยันเองไปแล้วให้กดซ้ำ
 
 ---
 
