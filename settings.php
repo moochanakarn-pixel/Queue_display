@@ -466,6 +466,7 @@ select.field-select:focus{border-color:#3b82f6}
                 </div>
             </div>
             <button type="button" class="btn-test" id="btnTest">ทดสอบการเชื่อมต่อ</button>
+            <div style="font-size:12px;color:#64748b;margin-top:4px">ถ้าไม่ได้พิมพ์ Password ใหม่ ช่องนี้จะว่างเสมอ (ไม่โชว์รหัสผ่านที่บันทึกไว้) ปุ่มทดสอบ/โหลดรายการด้านล่างจะใช้รหัสผ่านว่างทดสอบ — ถ้าจะทดสอบให้ตรงกับที่บันทึกไว้จริง ต้องพิมพ์รหัสผ่านซ้ำก่อนกด</div>
             <div class="test-result" id="testResult"></div>
         </div>
 
@@ -496,6 +497,7 @@ select.field-select:focus{border-color:#3b82f6}
                     </select>
                     <button type="button" class="btn-test" id="btnLoadComputers">โหลดรายการ</button>
                 </div>
+                <div style="font-size:12px;color:#64748b;margin-top:4px">ใช้แค่แสดงชื่อป้ายมุมขวาบน (ถ้าเปิด "แสดงชื่อคอมพิวเตอร์" ด้านล่าง) และเช็คว่าตั้งค่าไว้แล้ว — <strong>ไม่ได้กรองว่าออเดอร์จากเครื่องไหนขึ้นจอ</strong> ออเดอร์ขึ้นจอตามที่ POS ส่งเข้ามาเองทั้งหมด</div>
                 <div class="test-result" id="computerLoadResult"></div>
             </div>
             <div class="field">
@@ -747,6 +749,7 @@ select.field-select:focus{border-color:#3b82f6}
                         <span class="toggle-slider"></span>
                     </div>
                 </label>
+                <div style="font-size:12px;color:#64748b;margin-top:4px">ต้องเลือก Computer ในหัวข้อ "คอมพิวเตอร์จอแสดงคิว" ด้านบนไว้ด้วย ไม่งั้นเปิด toggle นี้แล้วจะไม่มีป้ายชื่อขึ้นให้เห็น</div>
             </div>
         </div>
 
