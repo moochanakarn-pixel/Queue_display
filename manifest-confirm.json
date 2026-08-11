@@ -1,0 +1,14 @@
+{
+  "name": "Queue Display — ยืนยันเสร็จ",
+  "short_name": "ยืนยันเสร็จ",
+  "start_url": "confirm.php",
+  "scope": ".",
+  "display": "standalone",
+  "background_color": "#0f172a",
+  "theme_color": "#0f172a",
+  "icons": [
+    { "src": "icons/confirm/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icons/confirm/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "icons/confirm/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

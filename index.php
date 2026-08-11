@@ -5,6 +5,10 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="robots" content="noindex">
+    <link rel="manifest" href="manifest-display.json">
+    <link rel="apple-touch-icon" sizes="180x180" href="icons/display/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="favicon.png">
+    <meta name="theme-color" content="<?php echo h(COLOR_HEADER_BG); ?>">
     <title><?php echo h(APP_TITLE); ?></title>
     <style>
         *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
